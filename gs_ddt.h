@@ -9,83 +9,92 @@ typedef struct gs_ddt_command_s {
         const char* desc;
 } gs_ddt_command_t;
 
-extern void gs_ddt_printf(const char* fmt, ...);
-extern void gs_ddt_update(gs_gui_context_t* ctx, const gs_gui_selector_desc_t* desc,
-                          int open, int autoscroll, float size, float open_speed, float close_speed,
-                          gs_ddt_command_t* commands, int command_len);
+typedef struct gs_ddt_s {
+        char tb[2048]; // text buffer
+        char cb[524]; // "command" buffer
+
+        float y;
+        float size;
+        float open_speed;
+        float close_speed;
+
+        int open;
+        int last_open_state;
+        int autoscroll;
+
+        gs_ddt_command_t* commands;
+        int commands_len;
+} gs_ddt_t;
+
+extern void gs_ddt_printf(gs_ddt_t* ddt, const char* fmt, ...);
+extern void gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, const gs_gui_selector_desc_t* desc);
 // A gui context must be begun before this is ran
 
 #ifdef GS_DDT_IMPL
 
-static char ddt_tb[2048] = ""; // text buffer
-static char ddt_cb[524]  = ""; // "command" buffer
-
 void
-gs_ddt_printf(const char* fmt, ...)
+gs_ddt_printf(gs_ddt_t* ddt, const char* fmt, ...)
 {
-        char tmp[512] = "";
+        char tmp[512] = {0};
         va_list args;
 
         va_start(args, fmt);
         vsnprintf(tmp, sizeof(tmp), fmt, args);
         va_end(args);
 
-        int n = sizeof(ddt_tb) - strlen(ddt_tb) - 1;
+        int n = sizeof(ddt->tb) - strlen(ddt->tb) - 1;
         int resize = strlen(tmp)  - n;
-        if (resize > 0)
-                memmove(ddt_tb, ddt_tb + resize, sizeof(ddt_tb) - resize);
-        n = sizeof(ddt_tb) - strlen(ddt_tb) - 1;
-        strncat(ddt_tb, tmp, n);
+        if (resize > 0) {
+                memmove(ddt->tb, ddt->tb + resize, sizeof(ddt->tb) - resize);
+                n = sizeof(ddt->tb) - strlen(ddt->tb) - 1;
+        }
+        strncat(ddt->tb, tmp, n);
 }
 
 void
-gs_ddt_update(gs_gui_context_t* ctx, const gs_gui_selector_desc_t* desc,
-              int open, int autoscroll, float size, float open_speed, float close_speed,
-              gs_ddt_command_t* commands, int command_len)
+gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, const gs_gui_selector_desc_t* desc)
 {
         gs_vec2 fb = ctx->framebuffer_size;
-        static float ddty;
-        static int last_open_state;
 
-        if (open)
-                ddty = gs_interp_linear(ddty, fb.y * size, open_speed);
-        else if (!open && ddty > 0)
-                ddty = gs_interp_linear(ddty, -1, close_speed);
-        else if (!open)
+        if (ddt->open)
+                ddt->y = gs_interp_linear(ddt->y, fb.y * ddt->size, ddt->open_speed);
+        else if (!ddt->open && ddt->y > 0)
+                ddt->y = gs_interp_linear(ddt->y, -1, ddt->close_speed);
+        else if (!ddt->open)
                 return;
 
-        if (gs_gui_window_begin_ex(ctx, "gs_ddt_content", gs_gui_rect(0, 0, fb.x, ddty - 24), NULL, NULL,
+        if (gs_gui_window_begin_ex(ctx, "gs_ddt_content", gs_gui_rect(0, 0, fb.x, ddt->y - 24), NULL, NULL,
                                    GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE)) {
                 gs_gui_layout_row(ctx, 1, (int[]){-1}, 0);
-                gs_gui_text(ctx, ddt_tb);
-                if (autoscroll) gs_gui_get_current_container(ctx)->scroll.y = sizeof(ddt_tb)*7+100;
+                gs_gui_text(ctx, ddt->tb);
+                if (ddt->autoscroll) gs_gui_get_current_container(ctx)->scroll.y = sizeof(ddt->tb)*7+100;
                 gs_gui_window_end(ctx);
         }
 
-        if (gs_gui_window_begin_ex(ctx, "gs_ddt_input", gs_gui_rect(0, ddty - 24, fb.x, 24), NULL, NULL,
+        if (gs_gui_window_begin_ex(ctx, "gs_ddt_input", gs_gui_rect(0, ddt->y - 24, fb.x, 24), NULL, NULL,
                                    GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE)) {
-                int len = strlen(ddt_cb);
+                int len = strlen(ddt->cb);
                 gs_gui_layout_row(ctx, 3, (int[]){14, len * 7+2, 10}, 0);
                 gs_gui_text(ctx, "$>");
-                gs_gui_text(ctx, ddt_cb);
+                gs_gui_text(ctx, ddt->cb);
 
                 // handle text input
-                int32_t n = gs_min(sizeof(ddt_cb) - len - 1, (int32_t) strlen(ctx->input_text));
-                if (!open || !last_open_state) {
+                int32_t n = gs_min(sizeof(ddt->cb) - len - 1, (int32_t) strlen(ctx->input_text));
+                if (!ddt->open || !ddt->last_open_state) {
 
                 } else if (ctx->key_pressed & GS_GUI_KEY_RETURN) {
-                        gs_ddt_printf("$ %s\n", ddt_cb);
+                        gs_ddt_printf(ddt, "$ %s\n", ddt->cb);
 
-                        if (*ddt_cb && commands) {
-                                char* tmp = ddt_cb;
+                        if (*ddt->cb && ddt->commands) {
+                                char* tmp = ddt->cb;
                                 int argc = 1;
                                 while((tmp = strchr(tmp, ' '))) {
                                         argc++;
                                         tmp++;
                                 }
 
-                                tmp = ddt_cb;
-                                char* last_pos = ddt_cb;
+                                tmp = ddt->cb;
+                                char* last_pos = ddt->cb;
                                 char* argv[argc];
                                 int i = 0;
                                 while((tmp = strchr(tmp, ' '))) {
@@ -95,33 +104,34 @@ gs_ddt_update(gs_gui_context_t* ctx, const gs_gui_selector_desc_t* desc,
                                 }
                                 argv[argc-1] = last_pos;
 
-                                for (int i = 0; i < command_len; i++) {
-                                        if (commands[i].name && commands[i].func && strcmp(argv[0], commands[i].name) == 0) {
-                                                commands[i].func(argc, argv);
-                                                goto command_found;
+                                for (int i = 0; i < ddt->commands_len; i++) {
+                                        if (ddt->commands[i].name && ddt->commands[i].func && strcmp(argv[0], ddt->commands[i].name) == 0) {
+                                                ddt->commands[i].func(argc, argv);
+                                                goto ddt_command_found;
                                         }
                                 }
-                                gs_ddt_printf("[gs_ddt]: unrecognized command '%s'\n", argv[0]);
-                        command_found:
-                                ddt_cb[0] = '\0';
+                                gs_ddt_printf(ddt, "[gs_ddt]: unrecognized command '%s'\n", argv[0]);
+                        ddt_command_found:
+                                ddt->cb[0] = '\0';
                         }
                 } else if (ctx->key_pressed & GS_GUI_KEY_BACKSPACE && len > 0) {
                         // skip utf-8 continuation bytes
-                        while ((ddt_cb[--len] & 0xc0) == 0x80 && len > 0);
-                        ddt_cb[len] = '\0';
+                        while ((ddt->cb[--len] & 0xc0) == 0x80 && len > 0);
+                        ddt->cb[len] = '\0';
                 } else if (n > 0) {
-                        memcpy(ddt_cb + len, ctx->input_text, n);
+                        memcpy(ddt->cb + len, ctx->input_text, n);
                         len += n;
-                        ddt_cb[len] = '\0';
+                        ddt->cb[len] = '\0';
                 }
 
                 // blinking cursor
                 gs_gui_get_layout(ctx)->body.x -= 5;
                 if ((int)(gs_platform_elapsed_time() / 666.0f) & 1)
                         gs_gui_text(ctx, "|");
+
                 gs_gui_window_end(ctx);
 
-                last_open_state = open;
+                ddt->last_open_state = ddt->open;
         }
 }
 #endif // GS_DDT_IMPL
