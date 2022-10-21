@@ -62,7 +62,7 @@ gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_
                 return;
 
         if (gs_gui_window_begin_ex(ctx, "gs_ddt_content", gs_gui_rect(screen.x, screen.y, screen.w, ddt->y - 24), NULL, NULL,
-                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE)) {
+                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK)) {
                 gs_gui_layout_row(ctx, 1, (int[]){-1}, 0);
                 gs_gui_text(ctx, ddt->tb);
                 if (ddt->autoscroll) gs_gui_get_current_container(ctx)->scroll.y = sizeof(ddt->tb)*7+100;
@@ -70,7 +70,7 @@ gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_
         }
 
         if (gs_gui_window_begin_ex(ctx, "gs_ddt_input", gs_gui_rect(screen.x, ddt->y - 24, screen.w, 24), NULL, NULL,
-                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE)) {
+                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK)) {
                 int len = strlen(ddt->cb);
                 gs_gui_layout_row(ctx, 3, (int[]){14, len * 7+2, 10}, 0);
                 gs_gui_text(ctx, "$>");
