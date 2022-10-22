@@ -67,7 +67,7 @@ gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_
 
         const float sz = gs_min(ddt->y, 26);
         if (gs_gui_window_begin_ex(ctx, "gs_ddt_content", gs_gui_rect(screen.x, screen.y, screen.w, ddt->y - sz), NULL, NULL,
-                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK | GS_GUI_OPT_FORCEFOCUS | GS_GUI_OPT_HOLDFOCUS | GS_GUI_OPT_BRINGTOFRONT)) {
+                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK | GS_GUI_OPT_FORCEFOCUS | GS_GUI_OPT_HOLDFOCUS)) {
                 gs_gui_layout_row(ctx, 1, (int[]){-1}, 0);
                 gs_gui_text(ctx, ddt->tb);
                 if (ddt->autoscroll) gs_gui_get_current_container(ctx)->scroll.y = sizeof(ddt->tb)*7+100;
