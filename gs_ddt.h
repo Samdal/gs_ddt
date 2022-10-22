@@ -20,6 +20,7 @@ typedef struct gs_ddt_s {
 
         int open;
         int last_open_state;
+        int close_complete;
         int autoscroll;
 
         gs_ddt_command_t* commands;
@@ -54,23 +55,29 @@ gs_ddt_printf(gs_ddt_t* ddt, const char* fmt, ...)
 void
 gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_selector_desc_t* desc)
 {
-        if (ddt->open)
+        if (ddt->open) {
                 ddt->y = gs_interp_linear(ddt->y, screen.h * ddt->size, ddt->open_speed);
-        else if (!ddt->open && ddt->y > 0)
+                ddt->close_complete = 0;
+        } else if (!ddt->open && ddt->y > 0 && !ddt->close_complete) {
                 ddt->y = gs_interp_linear(ddt->y, -1, ddt->close_speed);
-        else if (!ddt->open)
+        } else if (!ddt->open) {
+                ddt->close_complete = 1;
                 return;
+        }
 
-        if (gs_gui_window_begin_ex(ctx, "gs_ddt_content", gs_gui_rect(screen.x, screen.y, screen.w, ddt->y - 24), NULL, NULL,
-                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK)) {
+        const float sz = gs_min(ddt->y, 26);
+        if (gs_gui_window_begin_ex(ctx, "gs_ddt_content", gs_gui_rect(screen.x, screen.y, screen.w, ddt->y - sz), NULL, NULL,
+                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK | GS_GUI_OPT_FORCEFOCUS | GS_GUI_OPT_HOLDFOCUS | GS_GUI_OPT_BRINGTOFRONT)) {
                 gs_gui_layout_row(ctx, 1, (int[]){-1}, 0);
                 gs_gui_text(ctx, ddt->tb);
                 if (ddt->autoscroll) gs_gui_get_current_container(ctx)->scroll.y = sizeof(ddt->tb)*7+100;
+                gs_gui_container_t* ctn = gs_gui_get_current_container(ctx);
+                gs_gui_bring_to_front(ctx, ctn);
                 gs_gui_window_end(ctx);
         }
 
-        if (gs_gui_window_begin_ex(ctx, "gs_ddt_input", gs_gui_rect(screen.x, ddt->y - 24, screen.w, 24), NULL, NULL,
-                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK)) {
+        if (gs_gui_window_begin_ex(ctx, "gs_ddt_input", gs_gui_rect(screen.x, screen.y + ddt->y - sz, screen.w, sz), NULL, NULL,
+                                   GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK | GS_GUI_OPT_NOHOVER | GS_GUI_OPT_NOINTERACT)) {
                 int len = strlen(ddt->cb);
                 gs_gui_layout_row(ctx, 3, (int[]){14, len * 7+2, 10}, 0);
                 gs_gui_text(ctx, "$>");
@@ -127,10 +134,13 @@ gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_
                 if ((int)(gs_platform_elapsed_time() / 666.0f) & 1)
                         gs_gui_text(ctx, "|");
 
-                gs_gui_window_end(ctx);
+                gs_gui_container_t* ctn = gs_gui_get_current_container(ctx);
+                gs_gui_bring_to_front(ctx, ctn);
 
-                ddt->last_open_state = ddt->open;
+                gs_gui_window_end(ctx);
         }
+
+        ddt->last_open_state = ddt->open;
 }
 #endif // GS_DDT_IMPL
 
