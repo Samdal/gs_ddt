@@ -20,7 +20,6 @@ typedef struct gs_ddt_s {
 
         int open;
         int last_open_state;
-        int close_complete;
         int autoscroll;
 
         gs_ddt_command_t* commands;
@@ -55,15 +54,13 @@ gs_ddt_printf(gs_ddt_t* ddt, const char* fmt, ...)
 void
 gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_selector_desc_t* desc)
 {
-        if (ddt->open) {
-                ddt->y = gs_interp_linear(ddt->y, screen.h * ddt->size, ddt->open_speed);
-                ddt->close_complete = 0;
-        } else if (!ddt->open && ddt->y > 0 && !ddt->close_complete) {
-                ddt->y = gs_interp_linear(ddt->y, -1, ddt->close_speed);
-        } else if (!ddt->open) {
-                ddt->close_complete = 1;
+        if (ddt->open)
+                ddt->y += (screen.h * ddt->size - ddt->y) * ddt->open_speed;
+        else if (!ddt->open && ddt->y > 0)
+                ddt->y += (0 - ddt->y) * ddt->close_speed;
+        else
                 return;
-        }
+
 
         const float sz = gs_min(ddt->y, 26);
         if (gs_gui_window_begin_ex(ctx, "gs_ddt_content", gs_gui_rect(screen.x, screen.y, screen.w, ddt->y - sz), NULL, NULL,
