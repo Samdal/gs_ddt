@@ -11,7 +11,8 @@ typedef struct gs_ddt_command_s {
 
 typedef struct gs_ddt_s {
         char tb[2048]; // text buffer
-        char cb[524]; // "command" buffer
+        char cb[10][256]; // "command" buffer
+        int current_cb_idx;
 
         float y;
         float size;
@@ -75,28 +76,48 @@ gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_
 
         if (gs_gui_window_begin_ex(ctx, "gs_ddt_input", gs_gui_rect(screen.x, screen.y + ddt->y - sz, screen.w, sz), NULL, NULL,
                                    GS_GUI_OPT_FORCESETRECT | GS_GUI_OPT_NOTITLE | GS_GUI_OPT_NORESIZE | GS_GUI_OPT_NODOCK | GS_GUI_OPT_NOHOVER | GS_GUI_OPT_NOINTERACT)) {
-                int len = strlen(ddt->cb);
+                int len = strlen(ddt->cb[0]);
                 gs_gui_layout_row(ctx, 3, (int[]){14, len * 7+2, 10}, 0);
                 gs_gui_text(ctx, "$>");
-                gs_gui_text(ctx, ddt->cb);
+                gs_gui_text(ctx, ddt->cb[0]);
+
+                if (!ddt->open || !ddt->last_open_state)
+                        goto ddt_input_handling_done;
 
                 // handle text input
-                int32_t n = gs_min(sizeof(ddt->cb) - len - 1, (int32_t) strlen(ctx->input_text));
-                if (!ddt->open || !ddt->last_open_state) {
+                int32_t n = gs_min(sizeof(*ddt->cb) - len - 1, (int32_t) strlen(ctx->input_text));
 
-                } else if (ctx->key_pressed & GS_GUI_KEY_RETURN) {
-                        gs_ddt_printf(ddt, "$ %s\n", ddt->cb);
+                if (gs_platform_key_pressed(GS_KEYCODE_UP)) {
+                        ddt->current_cb_idx++;
+                        if (ddt->current_cb_idx >= gs_array_size(ddt->cb)) {
+                                ddt->current_cb_idx = gs_array_size(ddt->cb) - 1;
+                        } else {
+                                memcpy(&ddt->cb[0], &ddt->cb[ddt->current_cb_idx], sizeof(*ddt->cb));
+                        }
+                } else if (gs_platform_key_pressed(GS_KEYCODE_DOWN)) {
+                        ddt->current_cb_idx--;
+                        if (ddt->current_cb_idx <= 0) {
+                                ddt->current_cb_idx = 0;
+                                memset(&ddt->cb[0], 0, sizeof(*ddt->cb));
+                        } else {
+                                memcpy(&ddt->cb[0], &ddt->cb[ddt->current_cb_idx], sizeof(*ddt->cb));
+                        }
+                } else if (gs_platform_key_pressed(GS_KEYCODE_ENTER)) {
+                        ddt->current_cb_idx = 0;
+                        gs_ddt_printf(ddt, "$ %s\n", ddt->cb[0]);
 
-                        if (*ddt->cb && ddt->commands) {
-                                char* tmp = ddt->cb;
+                        memmove((uint8_t*)ddt->cb + sizeof(*ddt->cb), (uint8_t*)ddt->cb, sizeof(ddt->cb) - sizeof(*ddt->cb));
+
+                        if (ddt->cb[0][0] && ddt->commands) {
+                                char* tmp = ddt->cb[0];
                                 int argc = 1;
                                 while((tmp = strchr(tmp, ' '))) {
                                         argc++;
                                         tmp++;
                                 }
 
-                                tmp = ddt->cb;
-                                char* last_pos = ddt->cb;
+                                tmp = ddt->cb[0];
+                                char* last_pos = ddt->cb[0];
                                 char* argv[argc];
                                 int i = 0;
                                 while((tmp = strchr(tmp, ' '))) {
@@ -114,17 +135,23 @@ gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_
                                 }
                                 gs_ddt_printf(ddt, "[gs_ddt]: unrecognized command '%s'\n", argv[0]);
                         ddt_command_found:
-                                ddt->cb[0] = '\0';
+                                ddt->cb[0][0] = '\0';
                         }
-                } else if (ctx->key_pressed & GS_GUI_KEY_BACKSPACE && len > 0) {
+                } else if (gs_platform_key_pressed(GS_KEYCODE_BACKSPACE)) {
+                        ddt->current_cb_idx = 0;
                         // skip utf-8 continuation bytes
-                        while ((ddt->cb[--len] & 0xc0) == 0x80 && len > 0);
-                        ddt->cb[len] = '\0';
+                        while ((ddt->cb[0][--len] & 0xc0) == 0x80 && len > 0);
+                        ddt->cb[0][len] = '\0';
                 } else if (n > 0) {
-                        memcpy(ddt->cb + len, ctx->input_text, n);
-                        len += n;
-                        ddt->cb[len] = '\0';
+                        ddt->current_cb_idx = 0;
+                        if (len + n + 1 < sizeof(*ddt->cb)) {
+                                memcpy(ddt->cb[0] + len, ctx->input_text, n);
+                                len += n;
+                                ddt->cb[0][len] = '\0';
+                        }
                 }
+
+        ddt_input_handling_done:
 
                 // blinking cursor
                 gs_gui_get_layout(ctx)->body.x -= 5;
