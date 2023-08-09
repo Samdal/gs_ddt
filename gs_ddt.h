@@ -57,7 +57,7 @@ gs_ddt(gs_ddt_t* ddt, gs_gui_context_t* ctx, gs_gui_rect_t screen, const gs_gui_
 {
         if (ddt->open)
                 ddt->y += (screen.h * ddt->size - ddt->y) * ddt->open_speed;
-        else if (!ddt->open && ddt->y > 0)
+        else if (!ddt->open && ddt->y >= 1.0f)
                 ddt->y += (0 - ddt->y) * ddt->close_speed;
         else
                 return;
